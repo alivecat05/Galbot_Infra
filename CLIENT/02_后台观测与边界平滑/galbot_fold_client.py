@@ -637,30 +637,17 @@ def run_sync(args, robot, sensors, controller):
             raw_plan = make_plan(data)
             current_observation = observation_worker.snapshot()
             controller.reset_arm_target(current_observation["state"][-1, :14])
-            plan = smooth_action_plan(raw_plan, args.chunk_smoothing_window)
-            plan = blend_plan_start(
-                plan, controller.last_arm_target, args.chunk_blend_steps,
-            )
-            raw_step_max = float(np.abs(np.diff(raw_plan[:, :14], axis=0)).max()) if len(raw_plan) > 1 else 0.0
-            smooth_step_max = float(np.abs(np.diff(plan[:, :14], axis=0)).max()) if len(plan) > 1 else 0.0
-            execute_steps = len(plan) if args.sync_execute_steps == 0 else min(
-                len(plan), args.sync_execute_steps,
-            )
+            plan = blend_plan_start(raw_plan, controller.last_arm_target, args.chunk_blend_steps)
             logging.info(
-                "Fresh action chunk: execute=%d/%d steps; waited %.0fms; "
-                "arm step max %.4f -> %.4f rad",
-                execute_steps, len(plan), wait_ms, raw_step_max, smooth_step_max,
+                "Action chunk: %d steps; waited %.0fms; background observation active",
+                len(plan), wait_ms,
             )
-            for row in plan[:execute_steps]:
-                controller.execute_interpolated(
-                    split_action(row), 1.0 / args.hz, args.command_hz,
-                )
-
-            # Strict synchronous replanning: capture after the short action horizon,
-            # then hold the last target until this single request returns.
-            if observation_worker.error:
-                raise observation_worker.error
-            worker.request(observation_worker.snapshot())
+            for step, row in enumerate(plan):
+                controller.execute_interpolated(split_action(row), 1.0 / args.hz, args.command_hz)
+                if step == 0:
+                    if observation_worker.error:
+                        raise observation_worker.error
+                    worker.request(observation_worker.snapshot())
     finally:
         observation_worker.close()
         worker.close()

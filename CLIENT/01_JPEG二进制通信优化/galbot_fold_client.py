@@ -604,7 +604,7 @@ def run_sync(args, robot, sensors, controller):
     logging.info("Connected: %s", worker.metadata)
     logging.info("Image transport: %s", "224px JPEG" if encoded_images else "raw RGB")
     capture_started = time.monotonic()
-    history, next_observation = capture_observation_history(
+    _, next_observation = capture_observation_history(
         robot,
         sensors,
         args.lang,
@@ -615,54 +615,35 @@ def run_sync(args, robot, sensors, controller):
         transport_jpeg_quality=args.transport_jpeg_quality,
     )
     logging.info("Initial observation capture: %.0fms", (time.monotonic() - capture_started) * 1000)
-    controller.reset_arm_target(next_observation["state"][-1, :14])
-    observation_worker = ObservationHistoryWorker(
-        robot,
-        sensors,
-        args.lang,
-        obs_horizon,
-        args.hz,
-        history,
-        next_observation,
-        encoded_images,
-        args.transport_image_size,
-        args.transport_jpeg_quality,
-    )
     worker.request(next_observation)
     try:
         for _ in range(args.max_steps):
             waited_at = time.monotonic()
             _, data = wait_for_result(worker)
             wait_ms = (time.monotonic() - waited_at) * 1000
-            raw_plan = make_plan(data)
-            current_observation = observation_worker.snapshot()
-            controller.reset_arm_target(current_observation["state"][-1, :14])
-            plan = smooth_action_plan(raw_plan, args.chunk_smoothing_window)
-            plan = blend_plan_start(
-                plan, controller.last_arm_target, args.chunk_blend_steps,
-            )
-            raw_step_max = float(np.abs(np.diff(raw_plan[:, :14], axis=0)).max()) if len(raw_plan) > 1 else 0.0
-            smooth_step_max = float(np.abs(np.diff(plan[:, :14], axis=0)).max()) if len(plan) > 1 else 0.0
-            execute_steps = len(plan) if args.sync_execute_steps == 0 else min(
-                len(plan), args.sync_execute_steps,
-            )
+            plan = make_plan(data)
+            prefetch_step = len(plan) // 2
             logging.info(
-                "Fresh action chunk: execute=%d/%d steps; waited %.0fms; "
-                "arm step max %.4f -> %.4f rad",
-                execute_steps, len(plan), wait_ms, raw_step_max, smooth_step_max,
+                "Action chunk: %d steps; waited %.0fms",
+                len(plan), wait_ms,
             )
-            for row in plan[:execute_steps]:
-                controller.execute_interpolated(
-                    split_action(row), 1.0 / args.hz, args.command_hz,
-                )
-
-            # Strict synchronous replanning: capture after the short action horizon,
-            # then hold the last target until this single request returns.
-            if observation_worker.error:
-                raise observation_worker.error
-            worker.request(observation_worker.snapshot())
+            for step, row in enumerate(plan):
+                started = time.monotonic()
+                controller.execute(split_action(row), None, time.monotonic())
+                if step == prefetch_step:
+                    _, next_observation = capture_observation_history(
+                        robot,
+                        sensors,
+                        args.lang,
+                        obs_horizon,
+                        args.hz,
+                        encoded_images=encoded_images,
+                        transport_image_size=args.transport_image_size,
+                        transport_jpeg_quality=args.transport_jpeg_quality,
+                    )
+                    worker.request(next_observation)
+                time.sleep(max(0, 1 / args.hz - (time.monotonic() - started)))
     finally:
-        observation_worker.close()
         worker.close()
 
 

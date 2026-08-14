@@ -643,24 +643,19 @@ def run_sync(args, robot, sensors, controller):
             )
             raw_step_max = float(np.abs(np.diff(raw_plan[:, :14], axis=0)).max()) if len(raw_plan) > 1 else 0.0
             smooth_step_max = float(np.abs(np.diff(plan[:, :14], axis=0)).max()) if len(plan) > 1 else 0.0
-            execute_steps = len(plan) if args.sync_execute_steps == 0 else min(
-                len(plan), args.sync_execute_steps,
-            )
             logging.info(
-                "Fresh action chunk: execute=%d/%d steps; waited %.0fms; "
+                "Action chunk: execute=%d steps; waited %.0fms; "
                 "arm step max %.4f -> %.4f rad",
-                execute_steps, len(plan), wait_ms, raw_step_max, smooth_step_max,
+                len(plan), wait_ms, raw_step_max, smooth_step_max,
             )
-            for row in plan[:execute_steps]:
+            for step, row in enumerate(plan):
                 controller.execute_interpolated(
                     split_action(row), 1.0 / args.hz, args.command_hz,
                 )
-
-            # Strict synchronous replanning: capture after the short action horizon,
-            # then hold the last target until this single request returns.
-            if observation_worker.error:
-                raise observation_worker.error
-            worker.request(observation_worker.snapshot())
+                if step == 0:
+                    if observation_worker.error:
+                        raise observation_worker.error
+                    worker.request(observation_worker.snapshot())
     finally:
         observation_worker.close()
         worker.close()

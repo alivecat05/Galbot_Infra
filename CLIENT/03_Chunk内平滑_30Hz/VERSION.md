@@ -1,5 +1,23 @@
 # v03 Chunk 内平滑与 30 Hz 限幅
 
+## 上一版为什么还不够
+
+v02 解决了“节拍被拍照打断”和“换 chunk 瞬间跳一下”，但如果模型在同一个 chunk 内给出的目标是：
+
+```text
+0.40 -> 0.44 -> 0.39 -> 0.45 -> 0.38
+```
+
+机器人还是会正、负、正、负地小幅摆动。
+
+v03 像给动作装上三层减震：
+
+1. 先观察前后 5 个点，对整段轨迹去噪。
+2. 每次只靠近模型目标的一部分。
+3. 规定一个周期最多变化 `0.02 rad`。
+
+这一版针对的是“chunk 内小抖”，不是“每个 chunk 整体重新走一遍”的大幅往返。
+
 ## 目标
 
 在 v02 已消除大块控制停顿后，进一步抑制 action chunk 内相邻预测点的高频左右变化和位置阶跃。
@@ -95,3 +113,5 @@ delta = clip(q_desired - q_previous, -0.02, 0.02)
 - ACT action chunk 与 temporal aggregation 的原始工作。
 
 完整链接见 `docs/REFERENCES.md`。
+
+ACT 对朴素 chunk 抖动和 temporal ensemble 区别的原文见 `docs/QUOTED_EVIDENCE.md` 第 6、7 节。

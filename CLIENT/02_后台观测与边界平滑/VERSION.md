@@ -1,5 +1,17 @@
 # v02 后台观测与 chunk 边界平滑
 
+## 上一版为什么还不够
+
+v01 已经让包裹变小，但控制线程仍会亲自完成连续拍照和等待。就像快递变快了，司机却每开一段就停车整理相册，所以机器人仍可能“走一下、停一下”。
+
+v02 把拍照交给后台线程，并让新旧 action chunk 像两段铁轨一样平滑接上。它主要解决：
+
+```text
+长控制空窗 + chunk 第一帧突然跳变
+```
+
+它暂时不处理 chunk 内部每个 action 点自身的左右波动，也不处理整个 chunk 周期性的来回摆动。
+
 ## 目标
 
 解决控制线程在采集完整 `obs_horizon` 时停止下发关节命令的问题，并降低新旧 action chunk 首尾不连续造成的瞬时跳变。
@@ -96,3 +108,5 @@ delta_boundary = q_new_0 - q_old_end
 - ACT 对多视角图像、关节状态和 action chunk 的定义。
 
 完整链接见 `docs/REFERENCES.md`。
+
+Python 线程和 ACT chunk 切换问题的原文见 `docs/QUOTED_EVIDENCE.md` 第 4、6、8 节。

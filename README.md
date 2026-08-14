@@ -11,6 +11,8 @@ Galbot G1 双臂折衣模型的推理服务、部署客户端和版本化优化�
 - `CLIENT/04_严格同步短视界_反向确认_当前版`：严格同步短视界和反向确认。
 - `SERVER/inference_server_galbot_fold_clothes.py`：当前服务端入口。
 - `docs/REFERENCES.md`：论文、标准和官方文档。
+- `docs/BEGINNER_GUIDE.md`：从零开始解释通信、抖动和反向往返的前因后果。
+- `docs/QUOTED_EVIDENCE.md`：标准、官方文档和论文原文及其代码对应关系。
 - `docs/VERSION_MATRIX.md`：每一版解决的问题和控制语义对照。
 - `docs/VERIFICATION_GUIDE.md`：通信、时序和动作稳定性验证方法。
 
